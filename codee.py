@@ -22,10 +22,8 @@ REVERSE_MONTH_MAP = {
 def parse_date(date_str):
     """Tarih string'ini parse et (örn: Ocak 23 veya Oca.23 -> 2023, 1)"""
     try:
-        # String'e çevir ve temizle
         date_str = str(date_str).strip()
         
-        # Boşluk veya nokta ile ayır
         if ' ' in date_str:
             parts = date_str.split(' ')
         elif '.' in date_str:
@@ -36,11 +34,9 @@ def parse_date(date_str):
         if len(parts) != 2:
             return None, None
         
-        # Ay ismini normalize et (ilk 3 harf + büyük harf)
         month_name = parts[0].strip()[:3].capitalize()
         year_short = parts[1].strip()
         
-        # Özel karakterleri temizle (Şub, Ağu gibi)
         month_replacements = {
             'Sub': 'Şub',
             'Şub': 'Şub', 
@@ -98,10 +94,8 @@ def assign_segment(avg_consumption):
 def analyze_facility(df, tesisat_no, analysis_year, analysis_month, threshold):
     """Tek bir tesisat için anomali analizi yap"""
     
-    # Mevcut ay değeri
     current_val = get_consumption(df, tesisat_no, analysis_year, analysis_month)
     
-    # Önceki 2 ay
     prev1_month = 12 if analysis_month == 1 else analysis_month - 1
     prev1_year = analysis_year - 1 if analysis_month == 1 else analysis_year
     prev2_month = 11 if analysis_month <= 2 else (12 if analysis_month == 2 else analysis_month - 2)
@@ -110,11 +104,9 @@ def analyze_facility(df, tesisat_no, analysis_year, analysis_month, threshold):
     prev1_val = get_consumption(df, tesisat_no, prev1_year, prev1_month)
     prev2_val = get_consumption(df, tesisat_no, prev2_year, prev2_month)
     
-    # Önceki 2 yılın aynı ayı
     prev_year1_val = get_consumption(df, tesisat_no, analysis_year - 1, analysis_month)
     prev_year2_val = get_consumption(df, tesisat_no, analysis_year - 2, analysis_month)
     
-    # Sonraki 2 ay (trend için)
     next1_month = 1 if analysis_month == 12 else analysis_month + 1
     next1_year = analysis_year + 1 if analysis_month == 12 else analysis_year
     next2_month = 2 if analysis_month >= 11 else (1 if analysis_month == 11 else analysis_month + 2)
@@ -123,13 +115,11 @@ def analyze_facility(df, tesisat_no, analysis_year, analysis_month, threshold):
     next1_val = get_consumption(df, tesisat_no, next1_year, next1_month)
     next2_val = get_consumption(df, tesisat_no, next2_year, next2_month)
     
-    # 2024 ve 2023 için aynı aylar (trend)
     y2024_m1_val = get_consumption(df, tesisat_no, analysis_year - 1, next1_month)
     y2024_m2_val = get_consumption(df, tesisat_no, analysis_year - 1, next2_month)
     y2023_m1_val = get_consumption(df, tesisat_no, analysis_year - 2, next1_month)
     y2023_m2_val = get_consumption(df, tesisat_no, analysis_year - 2, next2_month)
     
-    # Segment belirleme (son 6 ay ortalaması)
     recent_data = df[(df['tesisat_no'] == tesisat_no) & 
                      (df['tuketim'] > 0) & 
                      (df['tuketim'].notna())]
@@ -140,7 +130,7 @@ def analyze_facility(df, tesisat_no, analysis_year, analysis_month, threshold):
     
     segment, segment_threshold = assign_segment(avg_consumption)
     
-    # ANALİZ 1: Önceki 2 ay ile karşılaştırma
+    # ANALİZ 1
     anomaly1 = {'detected': False, 'type': None, 'reason': '', 'change': None}
     
     if current_val is not None and prev1_val is not None:
@@ -155,7 +145,7 @@ def analyze_facility(df, tesisat_no, analysis_year, analysis_month, threshold):
     elif prev1_val is None:
         anomaly1['reason'] = f"{REVERSE_MONTH_MAP[prev1_month]}.{str(prev1_year)[2:]}: Veri yok"
     
-    # ANALİZ 2: Önceki 2 yılın aynı ayı ile karşılaştırma
+    # ANALİZ 2
     anomaly2 = {'detected': False, 'type': None, 'reason': '', 'change': None}
     
     if current_val is not None and prev_year1_val is not None:
@@ -170,7 +160,7 @@ def analyze_facility(df, tesisat_no, analysis_year, analysis_month, threshold):
     elif prev_year1_val is None:
         anomaly2['reason'] = f"{REVERSE_MONTH_MAP[analysis_month]}.{str(analysis_year-1)[2:]}: Veri yok"
     
-    # ANALİZ 3: Trend karşılaştırması
+    # ANALİZ 3
     anomaly3 = {'detected': False, 'type': None, 'reason': ''}
     
     trend_current = calculate_trend(prev2_val, prev1_val, current_val)
@@ -206,7 +196,6 @@ def analyze_facility(df, tesisat_no, analysis_year, analysis_month, threshold):
     else:
         anomaly3['reason'] = "Trend hesaplanamadı (eksik veri)"
     
-    # Genel anomali durumu
     has_anomaly = anomaly1['detected'] or anomaly2['detected'] or anomaly3['detected']
     anomaly_type = None
     if anomaly1['detected']:
@@ -216,7 +205,6 @@ def analyze_facility(df, tesisat_no, analysis_year, analysis_month, threshold):
     elif anomaly3['detected']:
         anomaly_type = anomaly3['type']
     
-    # Öncelik skoru hesapla
     priority_score = 0
     if has_anomaly and current_val is not None:
         max_change = max(
@@ -247,131 +235,125 @@ st.markdown("---")
 uploaded_file = st.file_uploader("Excel dosyasını yükleyin", type=['xlsx', 'xls'])
 
 if uploaded_file is not None:
-    # Dosyayı oku
-    df_raw = pd.read_excel(uploaded_file)
-    
-    # DEBUG: Ham veriyi göster
-    with st.expander("🔍 DEBUG: Ham Veri İnceleme"):
-        st.write("**Toplam Satır:**", len(df_raw))
-        st.write("**Sütun Adları (Orijinal):**", list(df_raw.columns))
-        st.write("**İlk 10 Satır:**")
-        st.dataframe(df_raw.head(10))
-        st.write("**Veri Tipleri:**")
-        st.write(df_raw.dtypes)
-    
-    # Sütun adlarını normalize et
-    df_raw.columns = df_raw.columns.str.strip().str.lower()
-    
-    st.write("**Normalize Edilmiş Sütunlar:**", list(df_raw.columns))
-    
-    # Sütun adlarını bul
-    tesisat_col = None
-    tarih_col = None
-    tuketim_col = None
-    
-    for col in df_raw.columns:
-        col_clean = col.replace('_', '').replace(' ', '')
-        if 'tesisat' in col_clean or col_clean == 'tesisatno':
-            tesisat_col = col
-        elif 'tarih' in col_clean or 'ay' in col_clean or 'donem' in col_clean:
-            tarih_col = col
-        elif 'tuketim' in col_clean or 'm3' in col_clean or 'miktar' in col_clean:
-            tuketim_col = col
-    
-    st.write(f"**Tespit Edilen Sütunlar:** Tesisat: `{tesisat_col}`, Tarih: `{tarih_col}`, Tüketim: `{tuketim_col}`")
-    
-    if not all([tesisat_col, tarih_col, tuketim_col]):
-        st.error("❌ Sütunlar otomatik tespit edilemedi!")
-        st.write("**Lütfen sütunları manuel seçin:**")
+    try:
+        # Dosyayı oku - tüm sheet'leri kontrol et
+        df_raw = pd.read_excel(uploaded_file, sheet_name=0)
         
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            tesisat_col = st.selectbox("Tesisat Sütunu", options=df_raw.columns)
-        with col2:
-            tarih_col = st.selectbox("Tarih Sütunu", options=df_raw.columns)
-        with col3:
-            tuketim_col = st.selectbox("Tüketim Sütunu", options=df_raw.columns)
+        st.write("📌 **Okundu! İlk 5 satır:**")
+        st.dataframe(df_raw.head())
+        st.write(f"**Sütun adları:** {list(df_raw.columns)}")
         
-        if not st.button("Sütunları Onayla"):
+        # Sütun adlarını normalize et
+        df_raw.columns = df_raw.columns.str.strip().str.lower()
+        
+        st.write(f"**Normalize edilmiş sütunlar:** {list(df_raw.columns)}")
+        
+        # Sütun adlarını bul - DAHA ESNEK
+        tesisat_col = None
+        tarih_col = None
+        tuketim_col = None
+        
+        for col in df_raw.columns:
+            col_lower = col.lower().strip()
+            if 'tesisat' in col_lower or 'facility' in col_lower:
+                tesisat_col = col
+            if 'tarih' in col_lower or 'ay' in col_lower or 'donem' in col_lower or 'periode' in col_lower:
+                tarih_col = col
+            if 'tuketim' in col_lower or 'm3' in col_lower or 'miktar' in col_lower or 'consumption' in col_lower:
+                tuketim_col = col
+        
+        st.write(f"**Tespit edilen sütunlar:** tesisat={tesisat_col}, tarih={tarih_col}, tuketim={tuketim_col}")
+        
+        if not all([tesisat_col, tarih_col, tuketim_col]):
+            st.error("❌ Sütunlar tespit edilemedi!")
+            st.error(f"Bulundu: tesisat_col={tesisat_col}, tarih_col={tarih_col}, tuketim_col={tuketim_col}")
+            st.warning("**Sütun adlarının şunları içermesi gerekir:** 'tesisat', 'tarih' (veya 'ay'), 'tuketim' (veya 'm3')")
             st.stop()
-    
-    # Veriyi işle
-    df = df_raw[[tesisat_col, tarih_col, tuketim_col]].copy()
-    df.columns = ['tesisat_no', 'tarih', 'tuketim']
-    
-    # Tarih parse et
-    df['yil'], df['ay'] = zip(*df['tarih'].apply(parse_date))
-    
-    # Geçersiz tarihleri temizle
-    df = df[(df['yil'].notna()) & (df['ay'].notna())]
-    df['yil'] = df['yil'].astype(int)
-    df['ay'] = df['ay'].astype(int)
-    
-    # Tüketim değerlerini float'a çevir
-    df['tuketim'] = pd.to_numeric(df['tuketim'], errors='coerce')
-    
-    # Benzersiz tesisatları al
-    unique_tesisats = df['tesisat_no'].unique()
-    
-    st.success(f"✓ {len(unique_tesisats):,} tesisat, {len(df):,} satır veri yüklendi")
-    
-    # Veri önizleme
-    with st.expander("📋 Veri Önizleme"):
-        st.dataframe(df.head(20))
-    
-    # Parametreler
-    st.markdown("### ⚙️ Analiz Parametreleri")
-    col1, col2, col3 = st.columns(3)
-    
-    # Mevcut yılları bul
-    available_years = sorted(df['yil'].unique(), reverse=True)
-    
-    with col1:
-        analysis_year = st.selectbox(
-            "Analiz Yılı",
-            options=available_years,
-            index=0
-        )
-    
-    with col2:
-        analysis_month = st.selectbox(
-            "Analiz Ayı",
-            options=list(REVERSE_MONTH_MAP.keys()),
-            format_func=lambda x: REVERSE_MONTH_MAP[x],
-            index=9  # Ekim
-        )
-    
-    with col3:
-        base_threshold = st.number_input(
-            "Baz Anomali Eşiği (%)",
-            min_value=0.0,
-            max_value=100.0,
-            value=20.0,
-            step=5.0,
-            help="Segmentlere göre otomatik ayarlanacak"
-        )
-    
-    st.info(f"📅 Seçilen dönem: **{REVERSE_MONTH_MAP[analysis_month]} {analysis_year}**")
-    
-    # Analiz butonu
-    if st.button("🔍 Analizi Başlat", type="primary", use_container_width=True):
-        with st.spinner('Analiz ediliyor...'):
-            results = []
-            progress_bar = st.progress(0)
-            
-            for idx, tesisat_no in enumerate(unique_tesisats):
-                result = analyze_facility(df, tesisat_no, analysis_year, analysis_month, base_threshold)
-                if result:
-                    results.append(result)
-                progress_bar.progress((idx + 1) / len(unique_tesisats))
-            
-            progress_bar.empty()
-            
-            # Sonuçları session state'e kaydet
-            st.session_state['results'] = results
-            st.session_state['df'] = df
-            st.session_state['analysis_year'] = analysis_year
-            st.session_state['analysis_month'] = analysis_month
+        
+        # Veriyi işle
+        df = df_raw[[tesisat_col, tarih_col, tuketim_col]].copy()
+        df.columns = ['tesisat_no', 'tarih', 'tuketim']
+        
+        # Tarih parse et
+        df['yil'], df['ay'] = zip(*df['tarih'].apply(parse_date))
+        
+        # Geçersiz tarihleri temizle
+        valid_rows = df[(df['yil'].notna()) & (df['ay'].notna())]
+        
+        st.write(f"**Geçerli satır sayısı:** {len(valid_rows)} / {len(df)}")
+        
+        if len(valid_rows) == 0:
+            st.error("❌ Tarih formatı parselenemedi! Örnek format: 'Ocak 23', 'Oca 23', 'Şubat 23'")
+            st.write("**Örnek tarihler:**", df['tarih'].unique()[:10])
+            st.stop()
+        
+        df = valid_rows
+        df['yil'] = df['yil'].astype(int)
+        df['ay'] = df['ay'].astype(int)
+        df['tuketim'] = pd.to_numeric(df['tuketim'], errors='coerce')
+        
+        unique_tesisats = df['tesisat_no'].unique()
+        
+        st.success(f"✓ {len(unique_tesisats):,} tesisat, {len(df):,} satır veri yüklendi")
+        
+        # Veri önizleme
+        with st.expander("📋 Veri Önizleme"):
+            st.dataframe(df.head(20))
+        
+        # Parametreler
+        st.markdown("### ⚙️ Analiz Parametreleri")
+        col1, col2, col3 = st.columns(3)
+        
+        available_years = sorted(df['yil'].unique(), reverse=True)
+        
+        with col1:
+            analysis_year = st.selectbox(
+                "Analiz Yılı",
+                options=available_years,
+                index=0
+            )
+        
+        with col2:
+            analysis_month = st.selectbox(
+                "Analiz Ayı",
+                options=list(REVERSE_MONTH_MAP.keys()),
+                format_func=lambda x: REVERSE_MONTH_MAP[x],
+                index=9
+            )
+        
+        with col3:
+            base_threshold = st.number_input(
+                "Baz Anomali Eşiği (%)",
+                min_value=0.0,
+                max_value=100.0,
+                value=20.0,
+                step=5.0,
+                help="Segmentlere göre otomatik ayarlanacak"
+            )
+        
+        st.info(f"📅 Seçilen dönem: **{REVERSE_MONTH_MAP[analysis_month]} {analysis_year}**")
+        
+        if st.button("🔍 Analizi Başlat", type="primary", use_container_width=True):
+            with st.spinner('Analiz ediliyor...'):
+                results = []
+                progress_bar = st.progress(0)
+                
+                for idx, tesisat_no in enumerate(unique_tesisats):
+                    result = analyze_facility(df, tesisat_no, analysis_year, analysis_month, base_threshold)
+                    if result:
+                        results.append(result)
+                    progress_bar.progress((idx + 1) / len(unique_tesisats))
+                
+                progress_bar.empty()
+                
+                st.session_state['results'] = results
+                st.session_state['df'] = df
+                st.session_state['analysis_year'] = analysis_year
+                st.session_state['analysis_month'] = analysis_month
+
+    except Exception as e:
+        st.error(f"❌ Hata: {str(e)}")
+        st.write("Lütfen Excel dosyasını kontrol edin ve tekrar yükleyin.")
 
 # Sonuçları göster
 if 'results' in st.session_state:
@@ -380,7 +362,6 @@ if 'results' in st.session_state:
     analysis_year = st.session_state['analysis_year']
     analysis_month = st.session_state['analysis_month']
     
-    # İstatistikler
     st.markdown("---")
     st.markdown("### 📈 İstatistikler")
     
@@ -397,7 +378,6 @@ if 'results' in st.session_state:
     col3.metric("Düşüş Anomalisi", f"{decrease_count:,}", delta="Öncelikli", delta_color="inverse")
     col4.metric("Artış Anomalisi", f"{increase_count:,}")
     
-    # Segment istatistikleri
     st.markdown("#### 📊 Segment Dağılımı")
     segment_stats = {}
     for r in results:
@@ -419,7 +399,6 @@ if 'results' in st.session_state:
     
     st.markdown("---")
     
-    # Filtreler
     st.markdown("### 🔍 Filtreler")
     filter_col1, filter_col2, filter_col3 = st.columns(3)
     
@@ -445,7 +424,6 @@ if 'results' in st.session_state:
             step=10.0
         )
     
-    # Filtreleme
     filtered_results = [r for r in results if r['has_anomaly']]
     
     if filter_type == 'Sadece Düşüşler':
@@ -456,12 +434,10 @@ if 'results' in st.session_state:
     filtered_results = [r for r in filtered_results if r['segment'] in filter_segment]
     filtered_results = [r for r in filtered_results if r['priority_score'] >= min_priority]
     
-    # Öncelik skoruna göre sırala
     filtered_results = sorted(filtered_results, key=lambda x: x['priority_score'], reverse=True)
     
     st.info(f"📊 Gösterilen: **{len(filtered_results):,}** anomali")
     
-    # Excel İndirme
     if filtered_results:
         export_data = []
         for r in filtered_results:
@@ -495,10 +471,8 @@ if 'results' in st.session_state:
     
     st.markdown("---")
     
-    # Anomali Listesi
     st.markdown("### 🚨 Tespit Edilen Anomaliler (Öncelik Sırasına Göre)")
     
-    # Sayfalama
     items_per_page = 20
     total_pages = (len(filtered_results) - 1) // items_per_page + 1 if filtered_results else 0
     
@@ -529,7 +503,6 @@ if 'results' in st.session_state:
                     st.write(f"Öncelik Skoru: **{result['priority_score']:.0f}**")
                 
                 with col2:
-                    # Tesisat için grafik
                     tesisat_data = df[df['tesisat_no'] == result['tesisat_no']].copy()
                     tesisat_data = tesisat_data.sort_values(['yil', 'ay'])
                     tesisat_data['tarih_str'] = tesisat_data.apply(
@@ -559,44 +532,4 @@ if 'results' in st.session_state:
                 with col2:
                     st.markdown("**📆 Analiz 2: Önceki 2 Yıl**")
                     if result['anomaly2']['detected']:
-                        st.error("✓ Anomali Tespit Edildi")
-                        st.write(result['anomaly2']['reason'])
-                    else:
-                        st.success("Anomali yok")
-                        if result['anomaly2']['reason']:
-                            st.caption(result['anomaly2']['reason'])
-                
-                with col3:
-                    st.markdown("**📊 Analiz 3: Trend**")
-                    if result['anomaly3']['detected']:
-                        st.error("✓ Anomali Tespit Edildi")
-                        st.write(result['anomaly3']['reason'])
-                    else:
-                        st.success("Anomali yok")
-                        if result['anomaly3']['reason']:
-                            st.caption(result['anomaly3']['reason'])
-    else:
-        st.info("Seçili filtrelere göre anomali bulunamadı.")
-
-else:
-    st.info("👆 Lütfen Excel dosyanızı yükleyin")
-    
-    st.markdown("---")
-    st.markdown("### 📋 Beklenen Veri Formatı (Uzun Format)")
-    
-    example_data = pd.DataFrame({
-        'Tesisat no': [123, 123, 123, 456, 456, 456],
-        'tarih': ['Ocak 23', 'Şubat 23', 'Mart 23', 'Ocak 23', 'Şubat 23', 'Mart 23'],
-        'tüketim m3': [20, 50, 60, 30, 40, 35]
-    })
-    
-    st.dataframe(example_data)
-    
-    st.markdown("""
-    **Önemli Noktalar:**
-    - Her satır bir tesisat-ay kombinasyonu
-    - Tesisat numarası her ay için tekrar edilmeli
-    - Tarih formatı: **Ocak 23, Şubat 23, Mart 23** veya **Oca 23, Şub 23** şeklinde olabilir
-    - Tüketim değerleri m³ cinsinden
-    - Boş veya 0 değerler "veri yok" olarak işlenir
-    """)
+                        st.error("✓
