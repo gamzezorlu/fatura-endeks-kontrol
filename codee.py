@@ -49,7 +49,13 @@ def parse_date(date_str):
             return None, None
         
         month = MONTH_MAP[month_name]
-        year = 2000 + int(year_short)
+        
+        # Yıl işleme: "23" -> 2023, "2023" -> 2023
+        year_int = int(year_short)
+        if year_int < 100:
+            year = 2000 + year_int
+        else:
+            year = year_int
         
         return year, month
     except:
