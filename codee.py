@@ -281,7 +281,10 @@ if uploaded_file is not None:
         df = df_raw[[tesisat_col, tarih_col, tuketim_col]].copy()
         df.columns = ['tesisat_no', 'tarih', 'tuketim']
         
-        df['yil'], df['ay'] = zip(*df['tarih'].apply(parse_date))
+        # Tarih parse et
+        parsed_dates = df['tarih'].apply(parse_date)
+        df['yil'] = parsed_dates.apply(lambda x: x[0])
+        df['ay'] = parsed_dates.apply(lambda x: x[1])
         
         valid_rows = df[(df['yil'].notna()) & (df['ay'].notna())]
         
