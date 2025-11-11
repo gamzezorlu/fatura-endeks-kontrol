@@ -85,17 +85,23 @@ def calculate_trend(v1, v2, v3):
     return (diff1 + diff2) / 2
 
 def assign_segment(avg_consumption):
-    """Tüketim ortalamasına göre segment ve eşik belirle"""
+    """Tüketim ortalamasına göre segment belirle (eşik artık kullanıcı tarafından belirlenir)"""
     if pd.isna(avg_consumption) or avg_consumption == 0:
-        return 'A', 50
+        return 'A'
     elif avg_consumption < 100:
-        return 'A', 50
-    elif avg_consumption < 300:
-        return 'B', 40
+        return 'A'
     elif avg_consumption < 1000:
-        return 'C', 30
+        return 'B'
+    elif avg_consumption < 5000:
+        return 'C'
+    elif avg_consumption < 10000:
+        return 'D'
+    elif avg_consumption < 50000:
+        return 'E'
+    elif avg_consumption < 100000:
+        return 'F'
     else:
-        return 'D', 25
+        return 'G'
 
 def analyze_facility(df, tesisat_no, analysis_year, analysis_month, threshold):
     """Tek bir tesisat için anomali analizi yap"""
@@ -320,11 +326,12 @@ if uploaded_file is not None:
         
         with col3:
             base_threshold = st.number_input(
-                "Baz Anomali Eşiği (%)",
+                "Anomali Eşiği (%)",
                 min_value=0.0,
                 max_value=100.0,
                 value=20.0,
-                step=5.0
+                step=1.0,
+                help="Tüm tesisatlar için uygulanacak anomali eşiği"
             )
         
         st.info(f"📅 Seçilen dönem: **{REVERSE_MONTH_MAP[analysis_month]} {analysis_year}**")
@@ -408,8 +415,8 @@ if 'results' in st.session_state:
     with filter_col2:
         filter_segment = st.multiselect(
             "Segment Filtresi",
-            options=['A', 'B', 'C', 'D'],
-            default=['A', 'B', 'C', 'D']
+            options=['A', 'B', 'C', 'D', 'E', 'F', 'G'],
+            default=['A', 'B', 'C', 'D', 'E', 'F', 'G']
         )
     
     with filter_col3:
