@@ -20,14 +20,34 @@ REVERSE_MONTH_MAP = {
 }
 
 def parse_date(date_str):
-    """Tarih string'ini parse et (örn: Oca.23 -> 2023, 1)"""
+    """Tarih string'ini parse et (örn: Ocak 23 veya Oca.23 -> 2023, 1)"""
     try:
-        parts = str(date_str).split('.')
+        # String'e çevir ve temizle
+        date_str = str(date_str).strip()
+        
+        # Boşluk veya nokta ile ayır
+        if ' ' in date_str:
+            parts = date_str.split(' ')
+        elif '.' in date_str:
+            parts = date_str.split('.')
+        else:
+            return None, None
+        
         if len(parts) != 2:
             return None, None
         
-        month_name = parts[0].capitalize()
-        year_short = parts[1]
+        # Ay ismini normalize et (ilk 3 harf + büyük harf)
+        month_name = parts[0].strip()[:3].capitalize()
+        year_short = parts[1].strip()
+        
+        # Özel karakterleri temizle (Şub, Ağu gibi)
+        month_replacements = {
+            'Sub': 'Şub',
+            'Şub': 'Şub', 
+            'Agu': 'Ağu',
+            'Ağu': 'Ağu'
+        }
+        month_name = month_replacements.get(month_name, month_name)
         
         if month_name not in MONTH_MAP:
             return None, None
@@ -36,7 +56,7 @@ def parse_date(date_str):
         year = 2000 + int(year_short)
         
         return year, month
-    except:
+    except Exception as e:
         return None, None
 
 def get_consumption(df, tesisat_no, year, month):
@@ -542,7 +562,7 @@ else:
     
     example_data = pd.DataFrame({
         'Tesisat no': [123, 123, 123, 456, 456, 456],
-        'tarih': ['Oca.23', 'Şub.23', 'Mar.23', 'Oca.23', 'Şub.23', 'Mar.23'],
+        'tarih': ['Ocak 23', 'Şubat 23', 'Mart 23', 'Ocak 23', 'Şubat 23', 'Mart 23'],
         'tüketim m3': [20, 50, 60, 30, 40, 35]
     })
     
@@ -552,7 +572,7 @@ else:
     **Önemli Noktalar:**
     - Her satır bir tesisat-ay kombinasyonu
     - Tesisat numarası her ay için tekrar edilmeli
-    - Tarih formatı: **Oca.23, Şub.23, Mar.23** şeklinde
+    - Tarih formatı: **Ocak 23, Şubat 23, Mart 23** veya **Oca 23, Şub 23** şeklinde olabilir
     - Tüketim değerleri m³ cinsinden
     - Boş veya 0 değerler "veri yok" olarak işlenir
     """)
