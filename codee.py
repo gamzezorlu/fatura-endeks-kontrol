@@ -20,7 +20,7 @@ REVERSE_MONTH_MAP = {
 }
 
 def parse_date(date_str):
-    """Tarih string'ini parse et (örn: Ocak 23 veya Oca.23 -> 2023, 1)"""
+    """Tarih string'ini parse et"""
     try:
         date_str = str(date_str).strip()
         
@@ -52,7 +52,7 @@ def parse_date(date_str):
         year = 2000 + int(year_short)
         
         return year, month
-    except Exception as e:
+    except:
         return None, None
 
 def get_consumption(df, tesisat_no, year, month):
@@ -236,19 +236,16 @@ uploaded_file = st.file_uploader("Excel dosyasını yükleyin", type=['xlsx', 'x
 
 if uploaded_file is not None:
     try:
-        # Dosyayı oku - tüm sheet'leri kontrol et
         df_raw = pd.read_excel(uploaded_file, sheet_name=0)
         
         st.write("📌 **Okundu! İlk 5 satır:**")
         st.dataframe(df_raw.head())
         st.write(f"**Sütun adları:** {list(df_raw.columns)}")
         
-        # Sütun adlarını normalize et
         df_raw.columns = df_raw.columns.str.strip().str.lower()
         
         st.write(f"**Normalize edilmiş sütunlar:** {list(df_raw.columns)}")
         
-        # Sütun adlarını bul - DAHA ESNEK
         tesisat_col = None
         tarih_col = None
         tuketim_col = None
@@ -266,18 +263,14 @@ if uploaded_file is not None:
         
         if not all([tesisat_col, tarih_col, tuketim_col]):
             st.error("❌ Sütunlar tespit edilemedi!")
-            st.error(f"Bulundu: tesisat_col={tesisat_col}, tarih_col={tarih_col}, tuketim_col={tuketim_col}")
             st.warning("**Sütun adlarının şunları içermesi gerekir:** 'tesisat', 'tarih' (veya 'ay'), 'tuketim' (veya 'm3')")
             st.stop()
         
-        # Veriyi işle
         df = df_raw[[tesisat_col, tarih_col, tuketim_col]].copy()
         df.columns = ['tesisat_no', 'tarih', 'tuketim']
         
-        # Tarih parse et
         df['yil'], df['ay'] = zip(*df['tarih'].apply(parse_date))
         
-        # Geçersiz tarihleri temizle
         valid_rows = df[(df['yil'].notna()) & (df['ay'].notna())]
         
         st.write(f"**Geçerli satır sayısı:** {len(valid_rows)} / {len(df)}")
@@ -296,11 +289,9 @@ if uploaded_file is not None:
         
         st.success(f"✓ {len(unique_tesisats):,} tesisat, {len(df):,} satır veri yüklendi")
         
-        # Veri önizleme
         with st.expander("📋 Veri Önizleme"):
             st.dataframe(df.head(20))
         
-        # Parametreler
         st.markdown("### ⚙️ Analiz Parametreleri")
         col1, col2, col3 = st.columns(3)
         
@@ -327,8 +318,7 @@ if uploaded_file is not None:
                 min_value=0.0,
                 max_value=100.0,
                 value=20.0,
-                step=5.0,
-                help="Segmentlere göre otomatik ayarlanacak"
+                step=5.0
             )
         
         st.info(f"📅 Seçilen dönem: **{REVERSE_MONTH_MAP[analysis_month]} {analysis_year}**")
@@ -486,19 +476,24 @@ if 'results' in st.session_state:
         for idx, result in enumerate(page_results, start=start_idx + 1):
             priority_color = "🔴" if result['priority_score'] >= 1000 else "🟡" if result['priority_score'] >= 100 else "🟢"
             
-            with st.expander(
+            expander_title = (
                 f"{priority_color} **#{idx} - Tesisat: {result['tesisat_no']}** | "
                 f"Segment: {result['segment']} | "
                 f"Öncelik: {result['priority_score']:.0f} | "
                 f"{'🔻 Düşüş' if result['anomaly_type'] == 'decrease' else '🔺 Artış'} | "
                 f"Tüketim: {result['current_val']:.1f} m³" if result['current_val'] is not None else "Veri yok"
-            ):
+            )
+            
+            with st.expander(expander_title):
                 col1, col2 = st.columns([1, 2])
                 
                 with col1:
                     st.markdown("**📊 Genel Bilgiler**")
                     st.write(f"Ortalama Tüketim: **{result['avg_consumption']:.1f} m³**")
-                    st.write(f"Mevcut Tüketim: **{result['current_val']:.1f} m³**" if result['current_val'] else "Veri yok")
+                    if result['current_val']:
+                        st.write(f"Mevcut Tüketim: **{result['current_val']:.1f} m³**")
+                    else:
+                        st.write("Mevcut Tüketim: **Veri yok**")
                     st.write(f"Segment: **{result['segment']}**")
                     st.write(f"Öncelik Skoru: **{result['priority_score']:.0f}**")
                 
@@ -532,4 +527,41 @@ if 'results' in st.session_state:
                 with col2:
                     st.markdown("**📆 Analiz 2: Önceki 2 Yıl**")
                     if result['anomaly2']['detected']:
-                        st.error("✓
+                        st.error("✓ Anomali Tespit Edildi")
+                        st.write(result['anomaly2']['reason'])
+                    else:
+                        st.success("Anomali yok")
+                        if result['anomaly2']['reason']:
+                            st.caption(result['anomaly2']['reason'])
+                
+                with col3:
+                    st.markdown("**📊 Analiz 3: Trend**")
+                    if result['anomaly3']['detected']:
+                        st.error("✓ Anomali Tespit Edildi")
+                        st.write(result['anomaly3']['reason'])
+                    else:
+                        st.success("Anomali yok")
+                        if result['anomaly3']['reason']:
+                            st.caption(result['anomaly3']['reason'])
+    else:
+        st.info("Seçili filtrelere göre anomali bulunamadı.")
+
+else:
+    st.info("👆 Lütfen Excel dosyanızı yükleyin")
+    
+    st.markdown("---")
+    st.markdown("### 📋 Beklenen Veri Formatı (Uzun Format)")
+    
+    example_data = pd.DataFrame({
+        'Tesisat no': [123, 123, 123, 456, 456, 456],
+        'tarih': ['Ocak 23', 'Şubat 23', 'Mart 23', 'Ocak 23', 'Şubat 23', 'Mart 23'],
+        'tüketim m3': [20, 50, 60, 30, 40, 35]
+    })
+    
+    st.dataframe(example_data)
+    
+    st.markdown("""
+    **Önemli Noktalar:**
+    - Her satır bir tesisat-ay kombinasyonu
+    - Tesisat numarası her ay için tekrar edilmeli
+    - Tarih formatı: **
