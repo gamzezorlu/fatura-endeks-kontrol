@@ -1,184 +1,125 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
 import io
 from datetime import datetime
 
-st.set_page_config(page_title="Doğalgaz Anomali Tespit", page_icon="📊", layout="wide")
+st.set_page_config(page_title="Fatura & Endeks Kontrol", layout="wide")
 
-# ------------------------------------------------------------
-# 📅 Ay isimleri eşleştirmesi
-# ------------------------------------------------------------
-MONTH_MAP = {
-    'Oca': 1, 'Şub': 2, 'Mar': 3, 'Nis': 4, 'May': 5, 'Haz': 6,
-    'Tem': 7, 'Ağu': 8, 'Eyl': 9, 'Eki': 10, 'Kas': 11, 'Ara': 12
+st.title("📊 Fatura & Endeks Kontrol Uygulaması")
+
+# Türkçe ay isimleri
+MONTHS = {
+    "ocak": 1, "şubat": 2, "mart": 3, "nisan": 4, "mayıs": 5, "haziran": 6,
+    "temmuz": 7, "ağustos": 8, "eylül": 9, "ekim": 10, "kasım": 11, "aralık": 12
 }
-REVERSE_MONTH_MAP = {v: k for k, v in MONTH_MAP.items()}
 
-# ------------------------------------------------------------
-# 🔢 Yardımcı Fonksiyonlar
-# ------------------------------------------------------------
+# Tarih parse fonksiyonu
 def parse_date(date_str):
-    """Tarih string'ini parse et (örn: Ocak 23 -> 2023, 1)"""
-    try:
-        if pd.isna(date_str):
-            return None, None
-        date_str = str(date_str).strip()
-
-        if ' ' in date_str:
-            parts = date_str.split(' ')
-        elif '.' in date_str:
-            parts = date_str.split('.')
-        else:
-            return None, None
-
-        if len(parts) != 2:
-            return None, None
-
-        month_name = parts[0].strip()[:3].capitalize()
-        year_short = parts[1].strip()
-
-        month_replacements = {'Sub': 'Şub', 'Agu': 'Ağu'}
-        month_name = month_replacements.get(month_name, month_name)
-
-        if month_name not in MONTH_MAP:
-            return None, None
-
-        month = MONTH_MAP[month_name]
-        year = 2000 + int(year_short)
-        return year, month
-    except Exception:
+    if pd.isna(date_str):
         return None, None
+    date_str = str(date_str).lower().replace(".", "").strip()
+    for m_name, m_num in MONTHS.items():
+        if m_name in date_str:
+            try:
+                year = int("20" + date_str[-2:])
+                return year, m_num
+            except:
+                return None, None
+    try:
+        dt = pd.to_datetime(date_str, errors='coerce', dayfirst=True)
+        if pd.notna(dt):
+            return dt.year, dt.month
+    except:
+        pass
+    return None, None
 
+uploaded_file = st.file_uploader("📎 Excel dosyasını yükle (.xlsx)", type=["xlsx"])
 
-def get_consumption(df, tesisat_no, year, month):
-    """Belirli tesisat, yıl ve ay için tüketim değerini getir"""
-    filtered = df[(df['tesisat_no'] == tesisat_no) &
-                  (df['yil'] == year) &
-                  (df['ay'] == month)]
-    if filtered.empty:
-        return None
-    val = filtered['tuketim'].values[0]
-    if pd.isna(val) or val == 0:
-        return None
-    return float(val)
+if uploaded_file:
+    df = pd.read_excel(uploaded_file)
+    df.columns = df.columns.str.strip().str.lower()
 
+    # Olası sütun adları
+    tesisat_cols = ['tesisat', 'tesisat_no', 'tesisatno']
+    tarih_cols = ['tarih', 'ay', 'donem', 'tarihi']
+    tuketim_cols = ['tuketim', 'm3', 'miktar']
 
-def assign_segment(avg_consumption):
-    """Tüketim ortalamasına göre segment ve eşik belirle"""
-    if pd.isna(avg_consumption) or avg_consumption == 0:
-        return 'A', 50
-    elif avg_consumption < 100:
-        return 'A', 50
-    elif avg_consumption < 300:
-        return 'B', 40
-    elif avg_consumption < 1000:
-        return 'C', 30
-    else:
-        return 'D', 25
-
-
-def analyze_facility(df, tesisat_no, analysis_year, analysis_month, threshold):
-    """Ana analiz fonksiyonu"""
-    current_val = get_consumption(df, tesisat_no, analysis_year, analysis_month)
-    prev1_month = 12 if analysis_month == 1 else analysis_month - 1
-    prev1_year = analysis_year - 1 if analysis_month == 1 else analysis_year
-    prev_year1_val = get_consumption(df, tesisat_no, analysis_year - 1, analysis_month)
-
-    # Ortalama ve segment belirle
-    recent_data = df[(df['tesisat_no'] == tesisat_no) &
-                     (df['tuketim'] > 0) &
-                     (df['tuketim'].notna())]
-    avg_consumption = recent_data['tuketim'].tail(6).mean() if not recent_data.empty else 0
-    segment, seg_threshold = assign_segment(avg_consumption)
-
-    anomaly_flag, anomaly_reason = False, ""
-    change_percent = 0
-
-    if current_val and prev1_val := get_consumption(df, tesisat_no, prev1_year, prev1_month):
-        change_percent = ((current_val - prev1_val) / prev1_val) * 100
-        if abs(change_percent) >= seg_threshold:
-            anomaly_flag = True
-            anomaly_reason = f"Aydan Aya Değişim %{change_percent:.1f}"
-
-    elif current_val and prev_year1_val:
-        change_percent = ((current_val - prev_year1_val) / prev_year1_val) * 100
-        if abs(change_percent) >= seg_threshold:
-            anomaly_flag = True
-            anomaly_reason = f"Yıllık Değişim %{change_percent:.1f}"
-
-    return {
-        'tesisat_no': tesisat_no,
-        'segment': segment,
-        'ortalama_tuketim': round(avg_consumption, 2),
-        'mevcut_tuketim': round(current_val or 0, 2),
-        'degisim_%': round(change_percent, 1),
-        'anomali': "VAR" if anomaly_flag else "YOK",
-        'anlam': anomaly_reason
-    }
-
-# ------------------------------------------------------------
-# 🌐 Streamlit Arayüzü
-# ------------------------------------------------------------
-st.title("📊 Doğalgaz Tüketim Anomali Tespit Sistemi")
-st.caption("**Excel çıktılı sürüm** – Her satır bir ay verisini temsil eder.")
-st.markdown("---")
-
-uploaded_file = st.file_uploader("📂 Excel dosyasını yükleyin", type=['xlsx', 'xls'])
-
-if uploaded_file is not None:
-    df_raw = pd.read_excel(uploaded_file)
-    df_raw.columns = df_raw.columns.str.strip().str.lower()
-
-    # Otomatik sütun tespiti
-    tesisat_col = next((c for c in df_raw.columns if 'tesisat' in c), None)
-    tarih_col = next((c for c in df_raw.columns if 'tarih' in c or 'ay' in c or 'donem' in c), None)
-    tuketim_col = next((c for c in df_raw.columns if 'tuketim' in c or 'm3' in c or 'miktar' in c), None)
+    # Gerçek sütun adlarını bul
+    tesisat_col = next((c for c in tesisat_cols if c in df.columns), None)
+    tarih_col = next((c for c in tarih_cols if c in df.columns), None)
+    tuketim_col = next((c for c in tuketim_cols if c in df.columns), None)
 
     if not all([tesisat_col, tarih_col, tuketim_col]):
-        st.error("❌ Sütun isimleri otomatik algılanamadı. Lütfen kontrol edin.")
-        st.stop()
+        st.error("⚠️ Gerekli sütunlar bulunamadı! Lütfen sütun adlarını kontrol edin.")
+    else:
+        # Tarihleri çözümle
+        df[['year', 'month']] = df[tarih_col].apply(lambda x: pd.Series(parse_date(x)))
+        df = df.dropna(subset=['year', 'month'])
+        df[tuketim_col] = pd.to_numeric(df[tuketim_col], errors='coerce')
+        df = df.dropna(subset=[tuketim_col])
 
-    df = df_raw[[tesisat_col, tarih_col, tuketim_col]].copy()
-    df.columns = ['tesisat_no', 'tarih', 'tuketim']
-    df['yil'], df['ay'] = zip(*df['tarih'].apply(parse_date))
-    df = df[(df['yil'].notna()) & (df['ay'].notna())]
-    df['yil'] = df['yil'].astype(int)
-    df['ay'] = df['ay'].astype(int)
-    df['tuketim'] = pd.to_numeric(df['tuketim'], errors='coerce')
+        df = df.astype({'year': int, 'month': int})
+        df = df.sort_values(by=[tesisat_col, 'year', 'month']).reset_index(drop=True)
 
-    if df.empty:
-        st.error("❌ Veri işlenemedi! Tarih formatını kontrol edin (örnek: Ocak 23, Şub 23).")
-        st.stop()
+        def get_consumption(df, tesisat_no, year, month):
+            row = df[(df[tesisat_col] == tesisat_no) &
+                     (df['year'] == year) &
+                     (df['month'] == month)]
+            if not row.empty:
+                return row.iloc[0][tuketim_col]
+            return None
 
-    st.success(f"✅ {df['tesisat_no'].nunique()} tesisat, {len(df)} satır veri başarıyla yüklendi.")
+        results = []
 
-    # Analiz parametreleri
-    col1, col2 = st.columns(2)
-    years = sorted(df['yil'].unique(), reverse=True)
-    with col1:
-        year = st.selectbox("Analiz yılı", years)
-    with col2:
-        month = st.selectbox("Analiz ayı", list(REVERSE_MONTH_MAP.keys()),
-                             format_func=lambda x: REVERSE_MONTH_MAP[x], index=9)
+        for i, row in df.iterrows():
+            tesisat_no = row[tesisat_col]
+            year = row['year']
+            month = row['month']
+            current_val = row[tuketim_col]
+            anomaly = ""
 
-    if st.button("🔍 Analizi Başlat", type="primary", use_container_width=True):
-        with st.spinner("Analiz yapılıyor..."):
-            results = [analyze_facility(df, t, year, month, 20) for t in df['tesisat_no'].unique()]
-            df_results = pd.DataFrame(results)
+            # Önceki ayların bilgileri
+            prev1_year, prev1_month = (year, month - 1) if month > 1 else (year - 1, 12)
+            prev2_year, prev2_month = (year, month - 2) if month > 2 else (year - 1, month + 10)
+            prev3_year, prev3_month = (year, month - 3) if month > 3 else (year - 1, month + 9)
 
-            st.markdown("### 🚨 Anomali Sonuçları")
-            st.dataframe(df_results, use_container_width=True)
+            prev1_val = get_consumption(df, tesisat_no, prev1_year, prev1_month)
+            prev2_val = get_consumption(df, tesisat_no, prev2_year, prev2_month)
+            prev3_val = get_consumption(df, tesisat_no, prev3_year, prev3_month)
 
-            # 🔽 Excel Çıktısı
-            buffer = io.BytesIO()
-            with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
-                df_results.to_excel(writer, sheet_name='Anomali Analizi', index=False)
-            st.download_button(
-                label="📥 Excel Sonuçlarını İndir",
-                data=buffer.getvalue(),
-                file_name=f"anomali_sonuclari_{datetime.now():%Y%m%d_%H%M}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
-else:
-    st.info("👆 Lütfen Excel dosyanızı yükleyin.")
+            if current_val and prev1_val:
+                increase_ratio = current_val / prev1_val if prev1_val > 0 else None
+                if increase_ratio and increase_ratio > 1.5:
+                    anomaly = "⚠️ Ani artış"
+            elif current_val and prev2_val:
+                increase_ratio = current_val / prev2_val if prev2_val > 0 else None
+                if increase_ratio and increase_ratio > 1.5:
+                    anomaly = "⚠️ 2 ay öncesine göre artış"
+            elif current_val and prev3_val:
+                increase_ratio = current_val / prev3_val if prev3_val > 0 else None
+                if increase_ratio and increase_ratio > 1.5:
+                    anomaly = "⚠️ 3 ay öncesine göre artış"
+
+            results.append({
+                "tesisat": tesisat_no,
+                "yıl": year,
+                "ay": month,
+                "tüketim": current_val,
+                "durum": anomaly
+            })
+
+        results_df = pd.DataFrame(results)
+
+        st.success(f"✅ {df[tesisat_col].nunique()} tesisat, {len(df)} satır veri işlendi.")
+        st.dataframe(results_df, use_container_width=True)
+
+        # Excel çıktısı
+        buffer = io.BytesIO()
+        with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
+            results_df.to_excel(writer, index=False, sheet_name='Sonuçlar')
+        st.download_button(
+            label="📥 Excel çıktısını indir",
+            data=buffer.getvalue(),
+            file_name="fatura_kontrol_sonuc.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
