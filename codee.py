@@ -564,4 +564,6 @@ else:
     **Önemli Noktalar:**
     - Her satır bir tesisat-ay kombinasyonu
     - Tesisat numarası her ay için tekrar edilmeli
-    - Tarih formatı: **
+    - Tarih formatı: **Ocak 23**, **Şubat 23**, **Mart 23** şeklinde olmalıdır  
+    - Tüketim sütunundaki değerler yalnızca sayısal olmalıdır (örneğin: 50)
+    """)
