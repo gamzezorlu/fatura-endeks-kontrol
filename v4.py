@@ -273,41 +273,7 @@ def analyze_facility(df, tesisat_no, analysis_year, analysis_month, segment_thre
         'priority_score': priority_score
     }{str(analysis_year-1)[2:]}: Veri yok"
     
-    # ANALİZ 3
-    anomaly3 = {'detected': False, 'type': None, 'reason': ''}
     
-    trend_current = calculate_trend(prev2_val, prev1_val, current_val)
-    trend_2024 = calculate_trend(prev_year1_val, y2024_m1_val, y2024_m2_val)
-    trend_2023 = calculate_trend(prev_year2_val, y2023_m1_val, y2023_m2_val)
-    
-    if trend_current is not None and (trend_2024 is not None or trend_2023 is not None):
-        trend_anomaly = False
-        trend_reasons = []
-        
-        if trend_2024 is not None:
-            trend_diff = abs(trend_current - trend_2024)
-            if trend_diff >= segment_threshold:
-                trend_anomaly = True
-                trend_reasons.append(f"2024 trend: {trend_2024:.1f} vs {analysis_year} trend: {trend_current:.1f}")
-        else:
-            trend_reasons.append("2024: Eksik veri")
-        
-        if trend_2023 is not None:
-            trend_diff = abs(trend_current - trend_2023)
-            if trend_diff >= segment_threshold:
-                trend_anomaly = True
-                trend_reasons.append(f"2023 trend: {trend_2023:.1f} vs {analysis_year} trend: {trend_current:.1f}")
-        else:
-            trend_reasons.append("2023: Eksik veri")
-        
-        if trend_anomaly:
-            anomaly3['detected'] = True
-            anomaly3['type'] = 'decrease' if trend_current < 0 else 'increase'
-            anomaly3['reason'] = ', '.join(trend_reasons)
-        elif trend_reasons:
-            anomaly3['reason'] = ', '.join(trend_reasons)
-    else:
-        anomaly3['reason'] = "Trend hesaplanamadı (eksik veri)"
     
     has_anomaly = anomaly1['detected'] or anomaly2['detected'] or anomaly3['detected']
     anomaly_type = None
