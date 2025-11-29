@@ -271,7 +271,7 @@ def analyze_facility(df, tesisat_no, analysis_year, analysis_month, segment_thre
         'has_anomaly': has_anomaly,
         'anomaly_type': anomaly_type,
         'priority_score': priority_score
-    }{str(analysis_year-1)[2:]}: Veri yok"
+    }
     
     
     
