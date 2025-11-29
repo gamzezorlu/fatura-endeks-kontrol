@@ -71,7 +71,7 @@ def get_consumption(df, tesisat_no, year, month):
         return None
     
     val = filtered['tuketim'].values[0]
-    if pd.isna(val) or val == 0:
+    if pd.isna(val) :
         return None
     
     return float(val)
