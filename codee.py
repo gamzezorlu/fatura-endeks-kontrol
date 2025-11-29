@@ -141,8 +141,6 @@ def analyze_facility(df, tesisat_no, analysis_year, analysis_month, threshold):
         avg_consumption = 0
     
     segment, segment_threshold = assign_segment(avg_consumption)
-    segment = assign_segment(avg_consumption)
-    segment_threshold = base_threshold
     
     # ANALİZ 1
     anomaly1 = {'detected': False, 'type': None, 'reason': '', 'change': None}
