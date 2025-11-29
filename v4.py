@@ -141,78 +141,138 @@ def analyze_facility(df, tesisat_no, analysis_year, analysis_month, segment_thre
         avg_consumption = 0
     
     segment, segment_threshold = assign_segment(avg_consumption, segment_thresholds)
-     
+    
     # ANALİZ 1 - Önceki ay ile karşılaştırma
-anomaly1 = {'detected': False, 'type': None, 'reason': '', 'change': None}
-
-if current_val is not None and prev1_val is not None:
-    # Her iki değer de 0 ise, değişiklik yok
-    if prev1_val == 0 and current_val == 0:
-        pass  # Anomali yok
-    # Önceki değer 0 ise ve şimdi değer varsa - artış
-    elif prev1_val == 0 and current_val > 0:
-        anomaly1['detected'] = True
-        anomaly1['type'] = 'increase'
-        anomaly1['change'] = None  # Sonsuz artış
-        anomaly1['reason'] = f"{REVERSE_MONTH_MAP[prev1_month]}.{str(prev1_year)[2:]}: 0 → {REVERSE_MONTH_MAP[analysis_month]}.{str(analysis_year)[2:]}: {current_val:.1f} (Sıfırdan artış)"
-    # Şimdi 0 ise ve önceden değer vardıysa - %100 düşüş
-    elif current_val == 0 and prev1_val > 0:
-        anomaly1['detected'] = True
-        anomaly1['type'] = 'decrease'
-        anomaly1['change'] = -100.0
-        anomaly1['reason'] = f"{REVERSE_MONTH_MAP[prev1_month]}.{str(prev1_year)[2:]}: {prev1_val:.1f} → {REVERSE_MONTH_MAP[analysis_month]}.{str(analysis_year)[2:]}: 0 (-100%)"
-    # Normal karşılaştırma (ikisi de 0'dan farklı)
-    else:
-        change_percent = ((current_val - prev1_val) / prev1_val) * 100
-        if abs(change_percent) >= segment_threshold:
+    anomaly1 = {'detected': False, 'type': None, 'reason': '', 'change': None}
+    
+    if current_val is not None and prev1_val is not None:
+        if prev1_val == 0 and current_val == 0:
+            pass
+        elif prev1_val == 0 and current_val > 0:
             anomaly1['detected'] = True
-            anomaly1['type'] = 'decrease' if change_percent < 0 else 'increase'
-            anomaly1['change'] = round(change_percent, 1)
-            anomaly1['reason'] = f"{REVERSE_MONTH_MAP[prev1_month]}.{str(prev1_year)[2:]}: {prev1_val:.1f} → {REVERSE_MONTH_MAP[analysis_month]}.{str(analysis_year)[2:]}: {current_val:.1f} ({'+' if change_percent > 0 else ''}{change_percent:.1f}%)"
-elif current_val is None:
-    anomaly1['detected'] = True
-    anomaly1['type'] = 'missing_data'
-    anomaly1['reason'] = f"{REVERSE_MONTH_MAP[analysis_month]}.{str(analysis_year)[2:]}: Veri yok"
-elif prev1_val is None:
-    anomaly1['detected'] = True
-    anomaly1['type'] = 'missing_data'
-    anomaly1['reason'] = f"{REVERSE_MONTH_MAP[prev1_month]}.{str(prev1_year)[2:]}: Veri yok"
-
-# ANALİZ 2 - Geçen yılın aynı ayı ile karşılaştırma
-anomaly2 = {'detected': False, 'type': None, 'reason': '', 'change': None}
-
-if current_val is not None and prev_year1_val is not None:
-    # Her iki değer de 0 ise, değişiklik yok
-    if prev_year1_val == 0 and current_val == 0:
-        pass  # Anomali yok
-    # Önceki yıl 0 ise ve şimdi değer varsa - artış
-    elif prev_year1_val == 0 and current_val > 0:
-        anomaly2['detected'] = True
-        anomaly2['type'] = 'increase'
-        anomaly2['change'] = None
-        anomaly2['reason'] = f"{REVERSE_MONTH_MAP[analysis_month]}.{str(analysis_year-1)[2:]}: 0 → {REVERSE_MONTH_MAP[analysis_month]}.{str(analysis_year)[2:]}: {current_val:.1f} (Sıfırdan artış)"
-    # Şimdi 0 ise ve önceki yıl değer vardıysa - %100 düşüş
-    elif current_val == 0 and prev_year1_val > 0:
-        anomaly2['detected'] = True
-        anomaly2['type'] = 'decrease'
-        anomaly2['change'] = -100.0
-        anomaly2['reason'] = f"{REVERSE_MONTH_MAP[analysis_month]}.{str(analysis_year-1)[2:]}: {prev_year1_val:.1f} → {REVERSE_MONTH_MAP[analysis_month]}.{str(analysis_year)[2:]}: 0 (-100%)"
-    # Normal karşılaştırma (ikisi de 0'dan farklı)
-    else:
-        change_percent = ((current_val - prev_year1_val) / prev_year1_val) * 100
-        if abs(change_percent) >= segment_threshold:
+            anomaly1['type'] = 'increase'
+            anomaly1['change'] = None
+            anomaly1['reason'] = f"{REVERSE_MONTH_MAP[prev1_month]}.{str(prev1_year)[2:]}: 0 → {REVERSE_MONTH_MAP[analysis_month]}.{str(analysis_year)[2:]}: {current_val:.1f} (Sıfırdan artış)"
+        elif current_val == 0 and prev1_val > 0:
+            anomaly1['detected'] = True
+            anomaly1['type'] = 'decrease'
+            anomaly1['change'] = -100.0
+            anomaly1['reason'] = f"{REVERSE_MONTH_MAP[prev1_month]}.{str(prev1_year)[2:]}: {prev1_val:.1f} → {REVERSE_MONTH_MAP[analysis_month]}.{str(analysis_year)[2:]}: 0 (-100%)"
+        else:
+            change_percent = ((current_val - prev1_val) / prev1_val) * 100
+            if abs(change_percent) >= segment_threshold:
+                anomaly1['detected'] = True
+                anomaly1['type'] = 'decrease' if change_percent < 0 else 'increase'
+                anomaly1['change'] = round(change_percent, 1)
+                anomaly1['reason'] = f"{REVERSE_MONTH_MAP[prev1_month]}.{str(prev1_year)[2:]}: {prev1_val:.1f} → {REVERSE_MONTH_MAP[analysis_month]}.{str(analysis_year)[2:]}: {current_val:.1f} ({'+' if change_percent > 0 else ''}{change_percent:.1f}%)"
+    elif current_val is None:
+        anomaly1['detected'] = True
+        anomaly1['type'] = 'missing_data'
+        anomaly1['reason'] = f"{REVERSE_MONTH_MAP[analysis_month]}.{str(analysis_year)[2:]}: Veri yok"
+    elif prev1_val is None:
+        anomaly1['detected'] = True
+        anomaly1['type'] = 'missing_data'
+        anomaly1['reason'] = f"{REVERSE_MONTH_MAP[prev1_month]}.{str(prev1_year)[2:]}: Veri yok"
+    
+    # ANALİZ 2 - Geçen yılın aynı ayı ile karşılaştırma
+    anomaly2 = {'detected': False, 'type': None, 'reason': '', 'change': None}
+    
+    if current_val is not None and prev_year1_val is not None:
+        if prev_year1_val == 0 and current_val == 0:
+            pass
+        elif prev_year1_val == 0 and current_val > 0:
             anomaly2['detected'] = True
-            anomaly2['type'] = 'decrease' if change_percent < 0 else 'increase'
-            anomaly2['change'] = round(change_percent, 1)
-            anomaly2['reason'] = f"{REVERSE_MONTH_MAP[analysis_month]}.{str(analysis_year-1)[2:]}: {prev_year1_val:.1f} → {REVERSE_MONTH_MAP[analysis_month]}.{str(analysis_year)[2:]}: {current_val:.1f} ({'+' if change_percent > 0 else ''}{change_percent:.1f}%)"
-elif current_val is None:
-    anomaly2['detected'] = True
-    anomaly2['type'] = 'missing_data'
-    anomaly2['reason'] = f"{REVERSE_MONTH_MAP[analysis_month]}.{str(analysis_year)[2:]}: Veri yok"
-elif prev_year1_val is None:
-    anomaly2['detected'] = True
-    anomaly2['type'] = 'missing_data'
-    anomaly2['reason'] = f"{REVERSE_MONTH_MAP[analysis_month]}.{str(analysis_year-1)[2:]}: Veri yok"
+            anomaly2['type'] = 'increase'
+            anomaly2['change'] = None
+            anomaly2['reason'] = f"{REVERSE_MONTH_MAP[analysis_month]}.{str(analysis_year-1)[2:]}: 0 → {REVERSE_MONTH_MAP[analysis_month]}.{str(analysis_year)[2:]}: {current_val:.1f} (Sıfırdan artış)"
+        elif current_val == 0 and prev_year1_val > 0:
+            anomaly2['detected'] = True
+            anomaly2['type'] = 'decrease'
+            anomaly2['change'] = -100.0
+            anomaly2['reason'] = f"{REVERSE_MONTH_MAP[analysis_month]}.{str(analysis_year-1)[2:]}: {prev_year1_val:.1f} → {REVERSE_MONTH_MAP[analysis_month]}.{str(analysis_year)[2:]}: 0 (-100%)"
+        else:
+            change_percent = ((current_val - prev_year1_val) / prev_year1_val) * 100
+            if abs(change_percent) >= segment_threshold:
+                anomaly2['detected'] = True
+                anomaly2['type'] = 'decrease' if change_percent < 0 else 'increase'
+                anomaly2['change'] = round(change_percent, 1)
+                anomaly2['reason'] = f"{REVERSE_MONTH_MAP[analysis_month]}.{str(analysis_year-1)[2:]}: {prev_year1_val:.1f} → {REVERSE_MONTH_MAP[analysis_month]}.{str(analysis_year)[2:]}: {current_val:.1f} ({'+' if change_percent > 0 else ''}{change_percent:.1f}%)"
+    elif current_val is None:
+        anomaly2['detected'] = True
+        anomaly2['type'] = 'missing_data'
+        anomaly2['reason'] = f"{REVERSE_MONTH_MAP[analysis_month]}.{str(analysis_year)[2:]}: Veri yok"
+    elif prev_year1_val is None:
+        anomaly2['detected'] = True
+        anomaly2['type'] = 'missing_data'
+        anomaly2['reason'] = f"{REVERSE_MONTH_MAP[analysis_month]}.{str(analysis_year-1)[2:]}: Veri yok"
+    
+    # ANALİZ 3 - Trend analizi
+    anomaly3 = {'detected': False, 'type': None, 'reason': ''}
+    
+    trend_current = calculate_trend(prev2_val, prev1_val, current_val)
+    trend_2024 = calculate_trend(prev_year1_val, y2024_m1_val, y2024_m2_val)
+    trend_2023 = calculate_trend(prev_year2_val, y2023_m1_val, y2023_m2_val)
+    
+    if trend_current is not None and (trend_2024 is not None or trend_2023 is not None):
+        trend_anomaly = False
+        trend_reasons = []
+        
+        if trend_2024 is not None:
+            trend_diff = abs(trend_current - trend_2024)
+            if trend_diff >= segment_threshold:
+                trend_anomaly = True
+                trend_reasons.append(f"2024 trend: {trend_2024:.1f} vs {analysis_year} trend: {trend_current:.1f}")
+        else:
+            trend_reasons.append("2024: Eksik veri")
+        
+        if trend_2023 is not None:
+            trend_diff = abs(trend_current - trend_2023)
+            if trend_diff >= segment_threshold:
+                trend_anomaly = True
+                trend_reasons.append(f"2023 trend: {trend_2023:.1f} vs {analysis_year} trend: {trend_current:.1f}")
+        else:
+            trend_reasons.append("2023: Eksik veri")
+        
+        if trend_anomaly:
+            anomaly3['detected'] = True
+            anomaly3['type'] = 'decrease' if trend_current < 0 else 'increase'
+            anomaly3['reason'] = ', '.join(trend_reasons)
+        elif trend_reasons:
+            anomaly3['reason'] = ', '.join(trend_reasons)
+    else:
+        anomaly3['reason'] = "Trend hesaplanamadı (eksik veri)"
+    
+    has_anomaly = anomaly1['detected'] or anomaly2['detected'] or anomaly3['detected']
+    anomaly_type = None
+    if anomaly1['detected']:
+        anomaly_type = anomaly1['type']
+    elif anomaly2['detected']:
+        anomaly_type = anomaly2['type']
+    elif anomaly3['detected']:
+        anomaly_type = anomaly3['type']
+    
+    priority_score = 0
+    if has_anomaly and current_val is not None:
+        max_change = max(
+            abs(anomaly1['change']) if anomaly1['change'] else 0,
+            abs(anomaly2['change']) if anomaly2['change'] else 0
+        )
+        priority_score = (avg_consumption * max_change) / 100
+    
+    return {
+        'tesisat_no': tesisat_no,
+        'current_val': current_val,
+        'avg_consumption': avg_consumption,
+        'segment': segment,
+        'segment_threshold': segment_threshold,
+        'anomaly1': anomaly1,
+        'anomaly2': anomaly2,
+        'anomaly3': anomaly3,
+        'has_anomaly': has_anomaly,
+        'anomaly_type': anomaly_type,
+        'priority_score': priority_score
+    }{str(analysis_year-1)[2:]}: Veri yok"
+    
     # ANALİZ 3
     anomaly3 = {'detected': False, 'type': None, 'reason': ''}
     
